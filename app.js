@@ -60,7 +60,7 @@
     const areas=["1號入料","1號出料","2號入料","2號出料"];
     app.innerHTML=pageHead("線上設備管理","查看 16 個安裝位置，安裝或更換時會自動建立使用期間紀錄。",btn("新增油壓缸","add-cylinder"))
       +`<div class="furnace-grid">${[1,2].map(n=>`<section class="furnace"><h3>${n}號加熱爐</h3><div class="area-grid">${areas.filter(a=>a.startsWith(n+"號")).map(area=>`<div class="area-card"><h4>${area}端</h4><div class="slots">${state.positions.filter(p=>p.area===area).map(positionCard).join("")}</div></div>`).join("")}</div></section>`).join("")}</div>`
-      +`<section class="panel" style="margin-top:16px"><h3>目前線上油壓缸明細</h3>${cylinderTable(activeCylinders().filter(c=>c.status==="in_use"))}</section>`;
+      +`<section class="panel" style="margin-top:16px"><h3>目前線上油壓缸明細</h3>${cylinderTable(activeCylinders().filter(c=>c.status==="in_use"),true)}</section>`;
   }
   function spares() {
     const ins=activeCylinders().filter(c=>c.status==="spare_in"), outs=activeCylinders().filter(c=>c.status==="spare_out"), floor2=activeCylinders().filter(c=>c.status==="spare_2f");
@@ -69,8 +69,8 @@
       +`<div class="grid-two"><section class="panel"><h3>入料端備品（${ins.length}）</h3>${table(ins)}</section><section class="panel"><h3>出料端備品（${outs.length}）</h3>${table(outs)}</section><section class="panel"><h3>2F 儲位備品（${floor2.length}）</h3>${table(floor2)}</section></div>
       <section class="panel"><h3>維修中／待檢查</h3>${cylinderTable(activeCylinders().filter(c=>["repair","inspect"].includes(c.status)))}</section>`;
   }
-  function cylinderTable(list) {
-    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th><th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td><td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${btn("編輯",`edit:${c.id}`,"button button-light button-small")}${c.status==="in_use"?btn("拆卸",`remove:${c.id}`,"button button-light button-small"):""}${["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}${btn("狀態",`status:${c.id}`,"button button-light button-small")}${btn("紀錄",`detail:${c.id}`,"button button-light button-small")}</div></td></tr>`).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
+  function cylinderTable(list, showInstallDate=false) {
+    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${btn("編輯",`edit:${c.id}`,"button button-light button-small")}${c.status==="in_use"?btn("拆卸",`remove:${c.id}`,"button button-light button-small"):""}${["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}${btn("狀態",`status:${c.id}`,"button button-light button-small")}${btn("紀錄",`detail:${c.id}`,"button button-light button-small")}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
   }
   function database() {
     app.innerHTML=pageHead("油壓缸資料庫","管理全部油壓缸編號、狀態、使用時間與維修歷史。",btn("新增油壓缸","add-cylinder"))
