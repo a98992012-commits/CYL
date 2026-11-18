@@ -62,7 +62,7 @@
   }
   function spares() {
     const ins=activeCylinders().filter(c=>c.status==="spare_in"), outs=activeCylinders().filter(c=>c.status==="spare_out"), floor2=activeCylinders().filter(c=>c.status==="spare_2f");
-    const table = list => list.length?`<div class="table-wrap"><table><thead><tr><th>編號</th><th>狀態</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td><span class="pill">${statusLabel(c.status)}</span></td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${btn("安裝到線上",`install:${c.id}`,"button button-primary button-small")}${btn("送修",`repair:${c.id}`,"button button-light button-small")}${btn("調整狀態",`status:${c.id}`,"button button-light button-small")}</div></td></tr>`).join("")}</tbody></table></div>`:empty("目前沒有此類備品");
+    const table = list => list.length?`<div class="table-wrap"><table><thead><tr><th>編號</th><th>儲位</th><th>整備狀態</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td><span class="pill">${statusLabel(c.status)}</span></td><td><select class="search-select spare-readiness" data-cylinder-id="${c.id}" aria-label="${esc(c.code)}整備狀態"><option value="ready" ${spareReadiness(c)==="ready"?"selected":""}>可用</option><option value="needs_prep" ${spareReadiness(c)==="needs_prep"?"selected":""}>需整備</option></select></td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${spareReadiness(c)==="ready"?btn("安裝到線上",`install:${c.id}`,"button button-primary button-small"):"<span class=\"muted\">整備完成後可安裝</span>"}${btn("送修",`repair:${c.id}`,"button button-light button-small")}${btn("調整儲位",`status:${c.id}`,"button button-light button-small")}</div></td></tr>`).join("")}</tbody></table></div>`:empty("目前沒有此類備品");
     app.innerHTML=pageHead("備品管理","備品分為入料端、出料端與 2F 儲位；可安裝、調動或送修。",btn("新增油壓缸","add-cylinder"))
       +`<div class="grid-two"><section class="panel"><h3>入料端備品（${ins.length}）</h3>${table(ins)}</section><section class="panel"><h3>出料端備品（${outs.length}）</h3>${table(outs)}</section><section class="panel"><h3>2F 儲位備品（${floor2.length}）</h3>${table(floor2)}</section></div>
       <section class="panel"><h3>維修中／待檢查</h3>${cylinderTable(activeCylinders().filter(c=>["repair","inspect"].includes(c.status)))}</section>`;
@@ -106,7 +106,7 @@
   }
   function positionAction(id) {
     const p=state.positions.find(x=>x.id===id); const old=getCyl(p.cylinderId);
-    const options=activeCylinders().filter(c=>["spare_in","spare_out","spare_2f"].includes(c.status));
+    const options=activeCylinders().filter(c=>["spare_in","spare_out","spare_2f"].includes(c.status)&&spareReadiness(c)==="ready");
     openModal(old?"更換線上油壓缸":"安裝油壓缸",`<div class="hint-box">位置：${p.area}端／位置 ${p.slot}${old?"。目前安裝："+esc(old.code)+"，確認後會結束舊油壓缸本次使用期間，並將舊設備轉為備品。":""}</div><div class="form-grid" style="margin-top:14px">${selectField("選擇要安裝的油壓缸","cylinderId",[["","請選擇"],...options.map(c=>[c.id,c.code+"（"+statusLabel(c.status)+"）"])],"")}${field("安裝日期","date",today(),"date")}</div>`,async v=>{
       const c=getCyl(v.cylinderId); if(!c) throw Error("請選擇油壓缸");
       if(old && old.id===c.id) throw Error("不能將同一支油壓缸重新安裝在原位置");
@@ -116,6 +116,7 @@
   }
   function installSpare(id) {
     const c=getCyl(id);
+    if(spareReadiness(c)!=="ready") { alert("此油壓缸目前標記為「需整備」，整備完成並改為「可用」後才能安裝。"); return; }
     const positions=state.positions.filter(p=>!p.cylinderId);
     openModal("安裝備品",`<div class="form-grid">${selectField("安裝位置","positionId",positions.map(p=>[p.id,p.area+"－位置 "+p.slot]),positions[0]?.id||"")}${field("安裝日期","date",today(),"date")}</div>`,async v=>{
       const p=state.positions.find(x=>x.id===v.positionId);if(!p||p.cylinderId)throw Error("該位置已被安裝，請重新選擇");
@@ -166,6 +167,13 @@
       }catch(e){alert("還原失敗："+e.message);}
     };reader.readAsText(file);
   }
+  app.addEventListener("change",async e=>{
+    if(!e.target.matches(".spare-readiness"))return;
+    const c=getCyl(e.target.dataset.cylinderId);if(!c)return;
+    c.spareReadiness=e.target.value;
+    addEvent("備品整備狀態調整",c,readinessLabel(c));
+    await save();render();
+  });
   app.addEventListener("click",e=>{
     const b=e.target.closest("[data-action]");if(!b)return;
     const [action,id]=b.dataset.action.split(":");
