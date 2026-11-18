@@ -78,7 +78,7 @@
       <section class="panel"><h3>維修中／待檢查</h3>${cylinderTable(activeCylinders().filter(c=>["repair","inspect"].includes(c.status)))}</section>`;
   }
   function cylinderTable(list, showInstallDate=false) {
-    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${btn("狀態",`status:${c.id}`,"button button-light button-small")}${c.status==="in_use"?btn("拆卸",`remove:${c.id}`,"button button-light button-small"):""}${["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}${btn("調整位置",`move-position:${c.id}`,"button button-light button-small")}${btn("紀錄",`detail:${c.id}`,"button button-light button-small")}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
+    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${showInstallDate?btn("狀態",`detail:${c.id}`,"button button-light button-small"):btn("編輯",`edit:${c.id}`,"button button-light button-small")}${!showInstallDate?btn("狀態",`status:${c.id}`,"button button-light button-small"):""}${!showInstallDate&&["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
   }
   function database() {
     app.innerHTML=pageHead("油壓缸資料庫","管理全部油壓缸編號、狀態、使用時間與維修歷史。",btn("新增油壓缸","add-cylinder"))
@@ -180,7 +180,7 @@
     const c=getCyl(id);
     const periods=(c.periods||[]).map(p=>`<div class="record"><div><div class="record-title">${esc(p.area)}－位置 ${p.slot}</div><div class="record-meta">${dateText(p.startDate)} 至 ${dateText(p.endDate)} · ${fmtDays(daysBetween(p.startDate,p.endDate||today()))}</div></div></div>`).join("");
     const repairs=(c.repairs||[]).map(r=>`<div class="record"><div><div class="record-title">維修 · ${dateText(r.startDate)}</div><div class="record-meta">${esc(r.reason||"未填原因")}；${esc(r.content||"未填維修內容")}；完成：${dateText(r.endDate)}</div></div></div>`).join("");
-    openModal("油壓缸歷史："+c.code,`<div class="stats"><div class="stat"><div class="stat-label">本次使用</div><div class="stat-value">${fmtDays(currentDays(c))}</div></div><div class="stat"><div class="stat-label">累積使用</div><div class="stat-value">${fmtDays(totalDays(c))}</div></div></div><h3>安裝／拆卸期間</h3>${periods||empty("尚無使用期間")}<h3 style="margin-top:18px">維修紀錄</h3>${repairs||empty("尚無維修紀錄")}`,async()=>{});
+    openModal("油壓缸狀態："+c.code,`<div class="hint-box"><b>備註：</b>${esc(c.note||"無")}</div><div class="stats"><div class="stat"><div class="stat-label">本次使用</div><div class="stat-value">${fmtDays(currentDays(c))}</div></div><div class="stat"><div class="stat-label">累積使用</div><div class="stat-value">${fmtDays(totalDays(c))}</div></div></div><h3>安裝／拆卸期間</h3>${periods||empty("尚無使用期間")}<h3 style="margin-top:18px">維修紀錄</h3>${repairs||empty("尚無維修紀錄")}`,async()=>{});
   }
   function exportData() {
     const blob=new Blob([JSON.stringify({...state,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});
@@ -210,7 +210,7 @@
     else if(action==="remove")removeCylinder(id);
     else if(action==="repair")repairAction(id);
     else if(action==="status")statusAction(id);
-    else if(action==="move-position")adjustOnlinePosition(id);
+    
     else if(action==="edit")editCylinder(id);
     else if(action==="detail")detail(id);
     else if(action==="export")exportData();
