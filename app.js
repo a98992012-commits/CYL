@@ -43,7 +43,7 @@
   const empty = text => `<div class="empty-state">${text}</div>`;
   const positionCard = (p, showYears=false) => {
     const c = getCyl(p.cylinderId);
-    return `<div class="slot ${c?"":"empty"}"><div class="slot-number">位置 ${p.slot}</div><div class="slot-code">${c?esc(c.code):"未安裝"}</div><div class="slot-days">${c?(showYears?fmtOverviewDays(currentDays(c)):fmtDays(currentDays(c))):"—"}</div>${btn(c?"更換":"安裝",`position:${p.id}`,"button button-light button-small")}</div>`;
+    return `<div class="slot ${c?"":"empty"}"><div class="slot-number">${showYears?"NO.":"位置 "}${p.slot}</div><div class="slot-code">${c?esc(c.code):"未安裝"}</div><div class="slot-days">${c?(showYears?fmtOverviewDays(currentDays(c)):fmtDays(currentDays(c))):"—"}</div>${btn(c?"更換":"安裝",`position:${p.id}`,"button button-light button-small")}</div>`;
   };
   function overview() {
     const cylinders=activeCylinders(), used=cylinders.filter(c=>c.status==="in_use").length;
