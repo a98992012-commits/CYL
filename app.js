@@ -84,13 +84,14 @@
   }
   function spares() {
     const ins=activeCylinders().filter(c=>c.status==="spare_in"), outs=activeCylinders().filter(c=>c.status==="spare_out"), floor2=activeCylinders().filter(c=>c.status==="spare_2f");
-    const table = list => list.length?`<div class="table-wrap"><table><thead><tr><th>編號</th><th>儲位</th><th>整備狀態</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td><span class="pill">${statusLabel(c.status)}</span></td><td><select class="search-select spare-readiness" data-cylinder-id="${c.id}" aria-label="${esc(c.code)}整備狀態"><option value="ready" ${spareReadiness(c)==="ready"?"selected":""}>可用</option><option value="needs_prep" ${spareReadiness(c)==="needs_prep"?"selected":""}>需整備</option></select></td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${spareReadiness(c)==="ready"?btn("安裝到線上",`install:${c.id}`,"button button-primary button-small"):"<span class=\"muted\">整備完成後可安裝</span>"}${btn("送修",`repair:${c.id}`,"button button-light button-small")}${btn("調整儲位",`status:${c.id}`,"button button-light button-small")}</div></td></tr>`).join("")}</tbody></table></div>`:empty("目前沒有此類備品");
+    const table = list => list.length?`<div class="table-wrap"><table><thead><tr><th>編號</th><th>儲位</th><th>整備狀態</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td><span class="pill">${statusLabel(c.status)}</span></td><td><select class="search-select spare-readiness" data-cylinder-id="${c.id}" aria-label="${esc(c.code)}整備狀態"><option value="ready" ${spareReadiness(c)==="ready"?"selected":""}>可用</option><option value="needs_prep" ${spareReadiness(c)==="needs_prep"?"selected":""}>需整備</option></select></td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${spareReadiness(c)==="ready"?btn("安裝到線上",`install:${c.id}`,"button button-primary button-small"):"<span class=\"muted\">整備完成後可安裝</span>"}${btn("送修",`send-repair:${c.id}`,"button button-light button-small")}${btn("調整儲位",`status:${c.id}`,"button button-light button-small")}</div></td></tr>`).join("")}</tbody></table></div>`:empty("目前沒有此類備品");
     app.innerHTML=pageHead("備品管理","備品分為入料端、出料端與 2F 儲位；可安裝、調動或送修。",btn("新增油壓缸","add-cylinder"))
       +`<div class="grid-two"><section class="panel"><h3>入料端備品（${ins.length}）</h3>${table(ins)}</section><section class="panel"><h3>出料端備品（${outs.length}）</h3>${table(outs)}</section><section class="panel"><h3>2F 儲位備品（${floor2.length}）</h3>${table(floor2)}</section></div>
       <section class="panel"><h3>維修中／待檢查</h3>${cylinderTable(activeCylinders().filter(c=>["repair","inspect"].includes(c.status)))}</section>`;
   }
   function cylinderTable(list, showInstallDate=false, databaseMode=false) {
-    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${showInstallDate?btn("狀態",`detail:${c.id}`,"button button-light button-small"):databaseMode?btn("備註",`edit:${c.id}`,"button button-light button-small"):btn("編輯",`edit:${c.id}`,"button button-light button-small")}${databaseMode?btn("歷年資訊",`history-view:${c.id}`,"button button-light button-small"):!showInstallDate?btn("狀態",`status:${c.id}`,"button button-light button-small"): ""}${!databaseMode&&!showInstallDate&&["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
+    const repairMode=!databaseMode&&!showInstallDate&&list.some(c=>["repair","inspect"].includes(c.status));
+    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${repairMode?"<th>工令號碼</th><th>送修日期</th>":""}${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);const repairRecord=[...(c.repairs||[])].reverse().find(r=>!r.endDate)||c.repairs?.at(-1);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${repairMode?`<td>${esc(repairRecord?.orderNo||"—")}</td><td>${repairRecord?.sentDate?dateText(repairRecord.sentDate):"—"}</td>`:""}${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${showInstallDate?btn("狀態",`detail:${c.id}`,"button button-light button-small"):databaseMode?btn("備註",`edit:${c.id}`,"button button-light button-small"):btn("編輯",`edit:${c.id}`,"button button-light button-small")}${databaseMode?btn("歷年資訊",`history-view:${c.id}`,"button button-light button-small"):!showInstallDate?btn("狀態",`status:${c.id}`,"button button-light button-small"): ""}${!databaseMode&&!showInstallDate&&["repair","inspect"].includes(c.status)?btn("交貨",`delivery:${c.id}`,"button button-light button-small"):""}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
   }
   function database() {
     const records=state.cylinders.filter(c=>c.status!=="scrapped");
@@ -241,13 +242,32 @@
       if(p)p.cylinderId=null;c.status=v.status;c.location="";if(["spare_in","spare_out","spare_2f"].includes(v.status))c.spareReadiness="needs_prep";if(v.status==="repair")c.repairs.push({id:crypto.randomUUID(),startDate:v.date,reason:v.detail||"",content:"",endDate:null});addEvent("拆卸",c,statusLabel(v.status)+(v.detail?"；"+v.detail:""),v.date);await save();render();
     });
   }
-  function repairAction(id) {
-    const c=getCyl(id);
-    openModal("維修處理",`<div class="form-grid">${selectField("處理狀態","status",[["repair","維修中"],["inspect","待檢查"],["spare_in","維修完成－入料端備品"],["spare_out","維修完成－出料端備品"],["spare_2f","維修完成－2F儲位"],["scrapped","報廢"]],c.status)}${field("日期","date",today(),"date")}<div class="form-field full"><label>故障原因／現象</label><textarea name="reason" rows="2">${esc(c.repairs.at(-1)?.reason||"")}</textarea></div><div class="form-field full"><label>維修內容</label><textarea name="content" rows="2">${esc(c.repairs.at(-1)?.content||"")}</textarea></div></div>`,async v=>{
-      checkpoint();c.status=v.status; c.location="";
-      let r=c.repairs.at(-1);if(!r||r.endDate){r={id:crypto.randomUUID(),startDate:v.date};c.repairs.push(r);}
-      r.reason=v.reason;r.content=v.content;if(["spare_in","spare_out","spare_2f","scrapped"].includes(v.status))r.endDate=v.date;
-      addEvent(v.status.startsWith("spare")?"維修完成":statusLabel(v.status),c,[v.reason,v.content].filter(Boolean).join("；")||"狀態更新",v.date);await save();render();
+  function sendRepair(id) {
+    const c=getCyl(id); if(!c)return;
+    openModal("油壓缸送修",`<div class="hint-box">送修後，系統會將油壓缸移至「維修中／待檢查」區。</div><div class="form-grid" style="margin-top:14px">${field("工令號碼","orderNo","","text",'required maxlength="80"')}${field("送修公司","company","","text",'required maxlength="120"')}${field("送修日期","sentDate","","date","required")}</div>`,async v=>{
+      const orderNo=v.orderNo.trim(),company=v.company.trim();
+      if(!orderNo)throw Error("請填寫工令號碼");
+      if(!company)throw Error("請填寫送修公司");
+      if(!v.sentDate)throw Error("請選擇送修日期");
+      checkpoint();
+      c.status="repair";c.location="";
+      c.repairs=c.repairs||[];
+      c.repairs.push({id:crypto.randomUUID(),startDate:v.sentDate,sentDate:v.sentDate,orderNo,company,reason:"",content:"",endDate:null});
+      addEvent("送修",c,`工令號碼：${orderNo}；送修公司：${company}`,v.sentDate);
+      await save();render();
+    });
+  }
+  function deliveryAction(id) {
+    const c=getCyl(id); if(!c)return;
+    const r=[...(c.repairs||[])].reverse().find(x=>!x.endDate)||c.repairs?.at(-1);
+    openModal("維修交貨",`<div class="hint-box">油壓缸：<b>${esc(c.code)}</b><br>工令號碼：${esc(r?.orderNo||"—")}<br>送修公司：${esc(r?.company||"—")}</div><div class="form-grid" style="margin-top:14px">${selectField("交貨後備品欄位","destinationStatus",[["spare_in","入料端備品"],["spare_out","出料端備品"],["spare_2f","2F 儲位備品"]],"spare_in")}${field("交貨日期","deliveryDate","","date","required")}</div>`,async v=>{
+      if(!["spare_in","spare_out","spare_2f"].includes(v.destinationStatus))throw Error("請選擇交貨後的備品欄位");
+      if(!v.deliveryDate)throw Error("請填寫交貨日期");
+      checkpoint();
+      c.status=v.destinationStatus;c.location="";c.spareReadiness="ready";
+      if(r){r.endDate=v.deliveryDate;r.deliveryDate=v.deliveryDate;r.destinationStatus=v.destinationStatus;}
+      addEvent("維修交貨",c,`工令號碼：${r?.orderNo||"—"}；送修公司：${r?.company||"—"}；移至${statusLabel(v.destinationStatus)}`,v.deliveryDate);
+      await save();render();
     });
   }
   function statusAction(id) {
@@ -336,7 +356,8 @@
     else if(action==="position")positionAction(id);
     else if(action==="install")installSpare(id);
     else if(action==="remove")removeCylinder(id);
-    else if(action==="repair")repairAction(id);
+    else if(action==="send-repair")sendRepair(id);
+    else if(action==="delivery")deliveryAction(id);
     else if(action==="status")statusAction(id);
     
     else if(action==="edit")editCylinder(id);
