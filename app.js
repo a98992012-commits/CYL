@@ -27,7 +27,15 @@
   const statusClass = s => s==="in_use"?"green":s==="repair"||s==="inspect"?"orange":s==="scrapped"?"red":"";
   const activeCylinders = () => state.cylinders.filter(c => c.active !== false);
   const addEvent = (type, c, detail, date=today()) => state.events.unshift({id:crypto.randomUUID(),date,type,code:c?.code || "—",detail});
-  const save = async () => { await CYLDB.save(state); $("#storageStatus").textContent = "已儲存於本機"; };
+  const save = async () => { await CYLDB.save(state); $("#storageStatus").textContent = "已儲存於本機"; updateUndoButton(); };
+  const checkpoint = () => { const snapshot=JSON.parse(JSON.stringify(state)); snapshot.undoSnapshot=null; state.undoSnapshot=snapshot; };
+  const updateUndoButton = () => { const b=$("#undoTop"); if(b) b.disabled=!state?.undoSnapshot; };
+  async function undoLast() {
+    if(!state?.undoSnapshot) return;
+    if(!confirm("確定復原上一筆異動？目前資料將回到異動前的狀態。")) return;
+    const previous=state.undoSnapshot; state={...previous,undoSnapshot:null};
+    await save(); render(); $("#storageStatus").textContent="已復原上一筆異動";
+  }
   const pageHead = (title,desc,action="") => `<div class="page-head"><div><h2>${title}</h2><div class="muted">${desc}</div></div>${action}</div>`;
   const btn = (label,action,cls="button button-primary") => `<button class="${cls}" data-action="${action}">${label}</button>`;
   const empty = text => `<div class="empty-state">${text}</div>`;
@@ -102,6 +110,7 @@
     openModal("新增油壓缸",`<div class="form-grid">${field("油壓缸編號","code","","text",'required maxlength="40"')}${selectField("初始狀態","status",[["spare_in","備品－入料端"],["spare_out","備品－出料端"],["spare_2f","備品－2F儲位"],["inspect","待檢查"],["repair","維修中"]],"spare_in")}${field("備註","note")}</div><p class="help">編號需唯一。若油壓缸目前已安裝在線上，請新增後再執行安裝。</p>`,async v=>{
       const code=v.code.trim(); if(!code) throw Error("請輸入油壓缸編號");
       if(state.cylinders.some(c=>c.code.toLowerCase()===code.toLowerCase())) throw Error("此編號已存在");
+      checkpoint();
       const c={id:crypto.randomUUID(),code,status:v.status,location:"",active:true,note:v.note,periods:[],repairs:[],createdAt:today()};
       state.cylinders.push(c); addEvent("新增油壓缸",c,v.note||statusLabel(v.status)); await save(); render();
     });
@@ -112,6 +121,7 @@
     openModal(old?"更換線上油壓缸":"安裝油壓缸",`<div class="hint-box">位置：${p.area}端／位置 ${p.slot}${old?"。目前安裝："+esc(old.code)+"，確認後會結束舊油壓缸本次使用期間，並將舊設備轉為備品。":""}</div><div class="form-grid" style="margin-top:14px">${selectField("選擇要安裝的油壓缸","cylinderId",[["","請選擇"],...options.map(c=>[c.id,c.code+"（"+statusLabel(c.status)+"）"])],"")}${field("安裝日期","date",today(),"date")}</div>`,async v=>{
       const c=getCyl(v.cylinderId); if(!c) throw Error("請選擇油壓缸");
       if(old && old.id===c.id) throw Error("不能將同一支油壓缸重新安裝在原位置");
+      checkpoint();
       if(old){const period=old.periods.find(x=>!x.endDate);if(period)period.endDate=v.date;old.status=p.area.includes("入料")?"spare_in":"spare_out";old.location="";addEvent("拆卸",old,p.area+"位置 "+p.slot+"；轉為"+statusLabel(old.status),v.date);}
       c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent(old?"更換安裝":"安裝",c,c.location,v.date);await save();render();
     });
@@ -122,20 +132,21 @@
     const positions=state.positions.filter(p=>!p.cylinderId);
     openModal("安裝備品",`<div class="form-grid">${selectField("安裝位置","positionId",positions.map(p=>[p.id,p.area+"－位置 "+p.slot]),positions[0]?.id||"")}${field("安裝日期","date",today(),"date")}</div>`,async v=>{
       const p=state.positions.find(x=>x.id===v.positionId);if(!p||p.cylinderId)throw Error("該位置已被安裝，請重新選擇");
-      c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent("備品安裝",c,c.location,v.date);await save();render();
+      checkpoint();c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent("備品安裝",c,c.location,v.date);await save();render();
     });
   }
   function removeCylinder(id) {
     const c=getCyl(id),p=state.positions.find(x=>x.cylinderId===id);
     openModal("拆卸油壓缸",`<div class="form-grid">${field("拆卸日期","date",today(),"date")}${selectField("拆卸後狀態","status",[["spare_in","備品－入料端"],["spare_out","備品－出料端"],["spare_2f","備品－2F儲位"],["repair","維修中"],["inspect","待檢查"],["scrapped","報廢"]],p?.area.includes("入料")?"spare_in":"spare_out")}${field("故障原因／備註","detail")}</div>`,async v=>{
-      const period=c.periods.find(x=>!x.endDate);if(period){if(v.date<period.startDate)throw Error("拆卸日期不可早於安裝日期");period.endDate=v.date;}
+      const period=c.periods.find(x=>!x.endDate);if(period&&v.date<period.startDate)throw Error("拆卸日期不可早於安裝日期");
+      checkpoint();if(period)period.endDate=v.date;
       if(p)p.cylinderId=null;c.status=v.status;c.location="";if(v.status==="repair")c.repairs.push({id:crypto.randomUUID(),startDate:v.date,reason:v.detail||"",content:"",endDate:null});addEvent("拆卸",c,statusLabel(v.status)+(v.detail?"；"+v.detail:""),v.date);await save();render();
     });
   }
   function repairAction(id) {
     const c=getCyl(id);
     openModal("維修處理",`<div class="form-grid">${selectField("處理狀態","status",[["repair","維修中"],["inspect","待檢查"],["spare_in","維修完成－入料端備品"],["spare_out","維修完成－出料端備品"],["spare_2f","維修完成－2F儲位"],["scrapped","報廢"]],c.status)}${field("日期","date",today(),"date")}<div class="form-field full"><label>故障原因／現象</label><textarea name="reason" rows="2">${esc(c.repairs.at(-1)?.reason||"")}</textarea></div><div class="form-field full"><label>維修內容</label><textarea name="content" rows="2">${esc(c.repairs.at(-1)?.content||"")}</textarea></div></div>`,async v=>{
-      c.status=v.status; c.location="";
+      checkpoint();c.status=v.status; c.location="";
       let r=c.repairs.at(-1);if(!r||r.endDate){r={id:crypto.randomUUID(),startDate:v.date};c.repairs.push(r);}
       r.reason=v.reason;r.content=v.content;if(["spare_in","spare_out","spare_2f","scrapped"].includes(v.status))r.endDate=v.date;
       addEvent(v.status.startsWith("spare")?"維修完成":statusLabel(v.status),c,[v.reason,v.content].filter(Boolean).join("；")||"狀態更新",v.date);await save();render();
@@ -143,12 +154,13 @@
   }
   function statusAction(id) {
     const c=getCyl(id);
-    openModal("調整油壓缸狀態",`<div class="form-grid">${selectField("新狀態","status",[["spare_in","備品－入料端"],["spare_out","備品－出料端"],["spare_2f","備品－2F儲位"],["repair","維修中"],["inspect","待檢查"],["scrapped","報廢"],["inactive","停用"]],c.status)}${field("異動日期","date",today(),"date")}</div>`,async v=>{c.status=v.status;c.location="";addEvent("狀態調整",c,statusLabel(v.status),v.date);await save();render();});
+    if(c.status==="in_use") { removeCylinder(id); return; }
+    openModal("調整油壓缸狀態",`<div class="hint-box">若設備目前仍在線上，請使用「拆卸」功能，系統會同步更新線上位置與使用期間。</div><div class="form-grid">${selectField("新狀態","status",[["spare_in","備品－入料端"],["spare_out","備品－出料端"],["spare_2f","備品－2F儲位"],["repair","維修中"],["inspect","待檢查"],["scrapped","報廢"],["inactive","停用"]],c.status)}${field("異動日期","date",today(),"date")}<div class="form-field full"><label><input type="checkbox" name="confirmChange" value="yes" required> 我確認要變更這支油壓缸的狀態</label></div></div>`,async v=>{if(v.confirmChange!=="yes")throw Error("請先勾選確認");checkpoint();c.status=v.status;c.location="";addEvent("狀態調整",c,statusLabel(v.status),v.date);await save();render();});
   }
   function editCylinder(id) {
     const c=getCyl(id);
     openModal("編輯油壓缸資料",`<div class="form-grid">${field("油壓缸編號","code",c.code)}${field("備註","note",c.note||"")}</div><p class="help">如需停用，請使用狀態調整。已有歷史的油壓缸不建議直接刪除。</p>`,async v=>{
-      const code=v.code.trim();if(!code)throw Error("編號不可空白");if(state.cylinders.some(x=>x.id!==id&&x.code.toLowerCase()===code.toLowerCase()))throw Error("此編號已存在");c.code=code;c.note=v.note;addEvent("資料修改",c,"更新編號或備註");await save();render();
+      const code=v.code.trim();if(!code)throw Error("編號不可空白");if(state.cylinders.some(x=>x.id!==id&&x.code.toLowerCase()===code.toLowerCase()))throw Error("此編號已存在");checkpoint();c.code=code;c.note=v.note;addEvent("資料修改",c,"更新編號或備註");await save();render();
     });
   }
   function detail(id) {
@@ -172,7 +184,7 @@
   app.addEventListener("change",async e=>{
     if(!e.target.matches(".spare-readiness"))return;
     const c=getCyl(e.target.dataset.cylinderId);if(!c)return;
-    c.spareReadiness=e.target.value;
+    checkpoint();c.spareReadiness=e.target.value;
     addEvent("備品整備狀態調整",c,readinessLabel(c));
     await save();render();
   });
@@ -196,6 +208,7 @@
   });
   $$(".nav-button").forEach(b=>b.addEventListener("click",()=>{currentPage=b.dataset.page;render();}));
   $("#backupTop").addEventListener("click",exportData);
+  $("#undoTop").addEventListener("click",undoLast);
   $("#importFile").addEventListener("change",e=>{if(e.target.files[0])importData(e.target.files[0]);e.target.value="";});
   app.addEventListener("input",e=>{
     if(e.target.id==="cylSearch"||e.target.id==="statusFilter"){
@@ -208,7 +221,23 @@
     }
   });
   async function init(){
-    try{state=await CYLDB.load();await CYLDB.save(state);$("#storageStatus").textContent="本機儲存正常";render();}
+    try{
+      state=await CYLDB.load(); state.undoSnapshot=null;
+      let repaired=false; const claimed=new Set();
+      for(const p of state.positions){
+        if(!p.cylinderId) continue;
+        const c=getCyl(p.cylinderId);
+        if(!c){p.cylinderId=null;repaired=true;continue;}
+        if(claimed.has(c.id)){p.cylinderId=null;repaired=true;continue;}
+        claimed.add(c.id);
+        const expectedLocation=p.area+"－位置 "+p.slot;
+        if(c.status!=="in_use"||c.location!==expectedLocation){c.status="in_use";c.location=expectedLocation;repaired=true;}
+        if(!(c.periods||[]).some(x=>!x.endDate)){
+          c.periods=c.periods||[];c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:today(),endDate:null});repaired=true;
+        }
+      }
+      await CYLDB.save(state); $("#storageStatus").textContent=repaired?"已修復線上設備資料":"本機儲存正常"; render();
+    }
     catch(e){app.innerHTML='<section class="panel"><h2>無法啟動本機資料庫</h2><p>'+esc(e.message)+'</p><p class="muted">請使用最新版 Safari、Chrome 或 Edge，並確認瀏覽器允許網站儲存資料。</p></section>';}
     if("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("./service-worker.js",{updateViaCache:"none"}).then(reg=>reg.update()).catch(()=>{});
   }
