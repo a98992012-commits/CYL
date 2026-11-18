@@ -61,9 +61,17 @@
   function eventList(events) {
     return events.length?`<div class="record-list">${events.map(e=>`<div class="record"><div class="record-main"><div class="record-title">${esc(e.code)} · ${esc(e.type)}</div><div class="record-meta">${dateText(e.date)}　${esc(e.detail)}</div></div></div>`).join("")}</div>`:empty("尚無異動紀錄");
   }
+  function cylinderPositionCode(c) {
+    const periods=c.periods||[];
+    const p=periods.find(x=>!x.endDate)||[...periods].sort((a,b)=>(b.startDate||"").localeCompare(a.startDate||""))[0];
+    if(!p||!p.area||!p.slot)return "—";
+    const areaMap={"1號入料":"C#1","1號出料":"E#1","2號入料":"C#2","2號出料":"E#2"};
+    const prefix=areaMap[p.area];
+    return prefix?prefix+"-"+p.slot:"—";
+  }
   function ranking(cylinders) {
     const top=[...cylinders].sort((a,b)=>totalDays(b)-totalDays(a)).slice(0,5), max=Math.max(1,...top.map(totalDays));
-    return top.length?`<div class="rank-list">${top.map((c,i)=>`<div class="rank-item"><span class="rank-number">${i+1}</span><div><b>${esc(c.code)}</b><div class="rank-bar"><div class="rank-fill" style="width:${totalDays(c)/max*100}%"></div></div></div><b>${fmtDays(totalDays(c))}</b></div>`).join("")}</div>`:empty("新增油壓缸後會顯示排行");
+    return top.length?`<div class="rank-list">${top.map((c,i)=>`<div class="rank-item"><span class="rank-number">${i+1}</span><div><b>${esc(c.code)}</b><div class="muted" style="font-size:12px;margin-top:2px">位置：${esc(cylinderPositionCode(c))}</div><div class="rank-bar"><div class="rank-fill" style="width:${totalDays(c)/max*100}%"></div></div></div><b>${fmtDays(totalDays(c))}</b></div>`).join("")}</div>`:empty("新增油壓缸後會顯示排行");
   }
   function online() {
     const areas=["1號入料","1號出料","2號入料","2號出料"];
