@@ -1,4 +1,4 @@
-const CACHE_NAME = "cyl-manager-v9";
+const CACHE_NAME = "cyl-manager-v10";
 const APP_FILES = ["./","./index.html","./styles.css","./db.js","./app.js","./manifest.json","./icons/icon.svg"];
 
 self.addEventListener("install", event => {
