@@ -60,7 +60,7 @@
       <div class="grid-two" style="margin-top:16px"><section class="panel"><h3>近期異動</h3>${eventList(state.events.slice(0,6))}</section><section class="panel"><h3>當前使用天數排行</h3>${ranking(cylinders,"current")}</section></div>`;
   }
   function eventList(events) {
-    return events.length?`<div class="record-list">${events.map(e=>`<div class="record"><div class="record-main"><div class="record-title">${esc(e.code)} · ${esc(e.type)}${e.category?` · ${e.category==="scheduled"?"定期更換":"異況"}`:""}</div><div class="record-meta">${dateText(e.date)}　${esc(e.detail)}</div></div></div>`).join("")}</div>`:empty("尚無異動紀錄");
+    return events.length?`<div class="record-list">${events.map(e=>`<div class="record"><div class="record-main"><div class="record-title">${esc(e.code)} · ${esc(e.type)}${e.category?` · ${e.category==="scheduled"?"定期更換":"異況"}`:""}</div><div class="record-meta">異動日期：${dateText(e.date)}　${esc(e.detail)}</div></div></div>`).join("")}</div>`:empty("尚無異動紀錄");
   }
   function cylinderPositionCode(c) {
     const periods=c.periods||[];
@@ -208,8 +208,8 @@
       if(old && !["scheduled","abnormal"].includes(v.replacementCategory)) throw Error("請選擇定期更換或異況");
       checkpoint();
       const replacementDetail=old?`分類：${v.replacementCategory==="scheduled"?"定期更換":"異況"}；更換備註：${v.replacementNote?.trim()||"未填寫"}；位置：${p.area}位置 ${p.slot}`:c.location;
-      if(old){const period=old.periods.find(x=>!x.endDate);if(period)period.endDate=v.date;old.status=p.area.includes("入料")?"spare_in":"spare_out";old.spareReadiness="needs_prep";old.location="";addEvent("拆卸",old,`轉為${statusLabel(old.status)}；${replacementDetail}`,v.date,v.replacementCategory);}
-      c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent(old?"更換安裝":"安裝",c,old?replacementDetail:c.location,v.date,old?v.replacementCategory:"");await save();render();
+      if(old){const period=old.periods.find(x=>!x.endDate);if(period)period.endDate=v.date;old.status=p.area.includes("入料")?"spare_in":"spare_out";old.spareReadiness="needs_prep";old.location="";addEvent("拆卸",old,`拆卸日期：${v.date}；轉為${statusLabel(old.status)}；${replacementDetail}`,today(),v.replacementCategory);}
+      c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent(old?"更換安裝":"安裝",c,`安裝日期：${v.date}；${old?replacementDetail:c.location}`,today(),old?v.replacementCategory:"");await save();render();
     });
   }
   function adjustOnlinePosition(id) {
@@ -231,7 +231,7 @@
     const positions=state.positions.filter(p=>!p.cylinderId);
     openModal("安裝備品",`<div class="form-grid">${selectField("安裝位置","positionId",positions.map(p=>[p.id,p.area+"－位置 "+p.slot]),positions[0]?.id||"")}${field("安裝日期","date",today(),"date")}</div>`,async v=>{
       const p=state.positions.find(x=>x.id===v.positionId);if(!p||p.cylinderId)throw Error("該位置已被安裝，請重新選擇");
-      checkpoint();c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent("備品安裝",c,c.location,v.date);await save();render();
+      checkpoint();c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent("備品安裝",c,`安裝日期：${v.date}；${c.location}`,today());await save();render();
     });
   }
   function removeCylinder(id) {
