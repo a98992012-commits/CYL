@@ -1,0 +1,14 @@
+{
+  "name": "油壓缸管理系統",
+  "short_name": "油壓缸管理",
+  "description": "離線油壓缸設備、備品與維修管理",
+  "lang": "zh-Hant",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6fa",
+  "theme_color": "#172b4d",
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
