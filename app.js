@@ -93,8 +93,17 @@
     return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${showInstallDate?btn("狀態",`detail:${c.id}`,"button button-light button-small"):databaseMode?btn("備註",`edit:${c.id}`,"button button-light button-small"):btn("編輯",`edit:${c.id}`,"button button-light button-small")}${databaseMode?btn("歷年資訊",`history-view:${c.id}`,"button button-light button-small"):!showInstallDate?btn("狀態",`status:${c.id}`,"button button-light button-small"): ""}${!databaseMode&&!showInstallDate&&["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
   }
   function database() {
-    app.innerHTML=pageHead("油壓缸資料庫","管理全部油壓缸編號、狀態、使用時間與維修歷史。",btn("新增油壓缸","add-cylinder"))
-      +`<section class="panel" style="margin-bottom:16px"><h3>累積使用天數排行</h3>${ranking(state.cylinders,"total")}</section><div class="toolbar"><input id="cylSearch" class="field" placeholder="搜尋油壓缸編號"><select id="statusFilter" class="search-select"><option value="">全部狀態</option>${Object.entries({in_use:"使用中",spare_in:"備品－入料端",spare_out:"備品－出料端",spare_2f:"備品－2F儲位",repair:"維修中",inspect:"待檢查",scrapped:"報廢",inactive:"已停用"}).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></div><div id="cylinderResults">${cylinderTable(state.cylinders,false,true)}</div>`;
+    const records=state.cylinders.filter(c=>c.status!=="scrapped");
+    app.innerHTML=pageHead("油壓缸資料庫","管理尚未報廢的油壓缸編號、狀態、使用時間與維修歷史。",btn("新增油壓缸","add-cylinder"))
+      +`<section class="panel" style="margin-bottom:16px"><h3>累積使用天數排行</h3>${ranking(records,"total")}</section><div class="toolbar"><input id="cylSearch" class="field" placeholder="搜尋油壓缸編號"><select id="statusFilter" class="search-select"><option value="">全部狀態</option>${Object.entries({in_use:"使用中",spare_in:"備品－入料端",spare_out:"備品－出料端",spare_2f:"備品－2F儲位",repair:"維修中",inspect:"待檢查",inactive:"已停用"}).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></div><div id="cylinderResults">${cylinderTable(records,false,true)}</div>`;
+  }
+  function scrappedTable(list) {
+    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>最後位置</th><th>累積使用</th><th>備註</th><th>操作</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td><span class="pill red">報廢</span></td><td>${esc(c.location||cylinderPositionCode(c))}</td><td>${fmtDays(totalDays(c))}</td><td>${esc(c.note||"—")}</td><td><div class="actions">${btn("備註",`edit:${c.id}`,"button button-light button-small")}${btn("歷年資訊",`history-view:${c.id}`,"button button-light button-small")}</div></td></tr>`).join("")}</tbody></table></div>`:empty("目前沒有已報廢的油壓缸");
+  }
+  function scrapped() {
+    const records=state.cylinders.filter(c=>c.status==="scrapped");
+    app.innerHTML=pageHead("報廢油壓缸","集中查看已標記為「報廢」的設備。資料仍保存在本機資料庫與備份中。")
+      +`<section class="panel"><div class="stat-label">報廢數量</div><div class="stat-value">${records.length}</div><div class="toolbar" style="margin-top:14px"><input id="scrappedSearch" class="field" placeholder="搜尋報廢油壓缸編號"></div><div id="scrappedResults">${scrappedTable(records)}</div></section>`;
   }
 
   function historyInfo(id) {
@@ -168,7 +177,7 @@
   }
   function render() {
     $$(".nav-button").forEach(b=>b.classList.toggle("active",b.dataset.page===currentPage));
-    ({overview,online,spares,database,usageHistory,history,settings}[currentPage] || overview)();
+    ({overview,online,spares,database,scrapped,usageHistory,history,settings}[currentPage] || overview)();
   }
   function field(label,name,value="",type="text",extra="") {
     return `<div class="form-field"><label for="f_${name}">${label}</label><input class="field" id="f_${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;
@@ -350,8 +359,14 @@
   app.addEventListener("input",e=>{
     if(e.target.id==="cylSearch"||e.target.id==="statusFilter"){
       const q=($("#cylSearch")?.value||"").toLowerCase(),s=$("#statusFilter")?.value||"";
-      const list=state.cylinders.filter(c=>c.code.toLowerCase().includes(q)&&(!s||c.status===s));
-      $("#cylinderResults").innerHTML=cylinderTable(list);
+      const list=state.cylinders.filter(c=>c.status!=="scrapped"&&c.code.toLowerCase().includes(q)&&(!s||c.status===s));
+      $("#cylinderResults").innerHTML=cylinderTable(list,false,true);
+    }
+    if(e.target.id==="scrappedSearch"){
+      const q=e.target.value.toLowerCase();
+      const list=state.cylinders.filter(c=>c.status==="scrapped"&&c.code.toLowerCase().includes(q));
+      const target=$("#scrappedResults");
+      if(target) target.innerHTML=scrappedTable(list);
     }
     if(e.target.id==="eventSearch"){
       const q=e.target.value.toLowerCase();$("#eventResults").innerHTML=eventList(state.events.filter(x=>(x.code+" "+x.detail+" "+x.type).toLowerCase().includes(q)));
