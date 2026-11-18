@@ -5,7 +5,7 @@
   let state;
   let currentPage = "overview";
   let modalAction = null;
-  const today = () => new Date().toLocaleDateString("en-CA");
+  const today = () => { const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); };
   const dateText = v => v ? new Date(v + "T00:00:00").toLocaleDateString("zh-TW") : "—";
   const daysBetween = (a,b) => {
     if (!a || !b) return 0;
