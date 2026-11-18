@@ -182,6 +182,48 @@
     const repairs=(c.repairs||[]).map(r=>`<div class="record"><div><div class="record-title">維修 · ${dateText(r.startDate)}</div><div class="record-meta">${esc(r.reason||"未填原因")}；${esc(r.content||"未填維修內容")}；完成：${dateText(r.endDate)}</div></div></div>`).join("");
     openModal("油壓缸狀態："+c.code,`<div class="hint-box"><b>備註：</b>${esc(c.note||"無")}</div><div class="stats"><div class="stat"><div class="stat-label">本次使用</div><div class="stat-value">${fmtDays(currentDays(c))}</div></div><div class="stat"><div class="stat-label">累積使用</div><div class="stat-value">${fmtDays(totalDays(c))}</div></div></div><h3>安裝／拆卸期間</h3>${periods||empty("尚無使用期間")}<h3 style="margin-top:18px">維修紀錄</h3>${repairs||empty("尚無維修紀錄")}`,async()=>{});
   }
+  async function updateToLatest() {
+    const button=$("#updateTop");
+    if(button){button.disabled=true;button.textContent="檢查更新中…";}
+    let reloading=false;
+    const reloadOnChange=()=>{
+      reloading=true;
+      $("#storageStatus").textContent="新版已啟用，正在重新載入…";
+      location.reload();
+    };
+    if("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("controllerchange",reloadOnChange,{once:true});
+    try {
+      if(!("serviceWorker" in navigator)) throw Error("此瀏覽器不支援離線更新，請直接重新整理網頁。");
+      let registration=await navigator.serviceWorker.getRegistration();
+      if(!registration) registration=await navigator.serviceWorker.register("./service-worker.js",{updateViaCache:"none"});
+      await registration.update();
+      const worker=registration.installing;
+      if(worker) {
+        await new Promise((resolve,reject)=>{
+          if(worker.state==="activated"){resolve();return;}
+          worker.addEventListener("statechange",()=>{
+            if(worker.state==="activated") resolve();
+            else if(worker.state==="redundant") reject(Error("新版安裝失敗，請稍後再試。"));
+          });
+        });
+        if(!reloading) location.reload();
+        return;
+      }
+      if(registration.waiting) {
+        registration.waiting.postMessage({type:"SKIP_WAITING"});
+        $("#storageStatus").textContent="已找到新版，正在啟用…";
+        return;
+      }
+      $("#storageStatus").textContent="目前已是最新版本";
+      if(button){button.textContent="已是最新版本";button.disabled=false;}
+      setTimeout(()=>{if(button&&button.textContent==="已是最新版本")button.textContent="更新至最新";},2500);
+    } catch(error) {
+      alert("更新檢查失敗："+(error.message||"請確認網路連線後重試。"));
+      if(button){button.disabled=false;button.textContent="更新至最新";}
+    } finally {
+      if(!reloading && button && button.textContent==="檢查更新中…"){button.disabled=false;button.textContent="更新至最新";}
+    }
+  }
   function exportData() {
     const blob=new Blob([JSON.stringify({...state,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="CYL-油壓缸資料備份-"+today()+".json";a.click();URL.revokeObjectURL(url);
@@ -222,6 +264,7 @@
   });
   $$(".nav-button").forEach(b=>b.addEventListener("click",()=>{currentPage=b.dataset.page;render();}));
   $("#backupTop").addEventListener("click",exportData);
+  $("#updateTop").addEventListener("click",updateToLatest);
   $("#undoTop").addEventListener("click",undoLast);
   $("#importFile").addEventListener("change",e=>{if(e.target.files[0])importData(e.target.files[0]);e.target.value="";});
   app.addEventListener("input",e=>{
