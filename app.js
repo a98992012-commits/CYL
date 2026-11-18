@@ -209,7 +209,8 @@
     else if(action==="install")installSpare(id);
     else if(action==="remove")removeCylinder(id);
     else if(action==="repair")repairAction(id);
-    else if(action==="status")statusAction(id);\n    else if(action==="move-position")adjustOnlinePosition(id);
+    else if(action==="status")statusAction(id);
+    else if(action==="move-position")adjustOnlinePosition(id);
     else if(action==="edit")editCylinder(id);
     else if(action==="detail")detail(id);
     else if(action==="export")exportData();
