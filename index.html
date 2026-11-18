@@ -27,7 +27,7 @@
     <button data-page="scrapped" class="nav-button">報廢油壓缸</button>
   </nav>
   <main id="app" class="main" aria-live="polite"><div class="loading">正在載入本機資料…</div></main>
-  <dialog id="modal"><form method="dialog" id="modalForm"><div class="modal-head"><h2 id="modalTitle">資料操作</h2><button class="icon-button" value="cancel" aria-label="關閉">✕</button></div><div id="modalBody" class="modal-body"></div><div class="modal-actions"><button class="button button-light" value="cancel">取消</button><button id="modalSubmit" class="button button-primary" value="default">確認</button></div></form></dialog>
+  <dialog id="modal"><form method="dialog" id="modalForm"><div class="modal-head"><h2 id="modalTitle">資料操作</h2><button class="icon-button" value="cancel" formnovalidate aria-label="關閉">✕</button></div><div id="modalBody" class="modal-body"></div><div class="modal-actions"><button class="button button-light" value="cancel" formnovalidate>取消</button><button id="modalSubmit" class="button button-primary" value="default">確認</button></div></form></dialog>
   <input id="importFile" type="file" accept="application/json,.json" hidden>
   <script src="./db.js"></script>
   <script src="./app.js"></script>
