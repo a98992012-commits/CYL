@@ -5,6 +5,7 @@
   let state;
   let currentPage = "overview";
   let modalAction = null;
+  let selectedHistoryCylinderId = "";
   const today = () => { const d=new Date(); return [d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-"); };
   const dateText = v => v ? new Date(v + "T00:00:00").toLocaleDateString("zh-TW") : "—";
   const daysBetween = (a,b) => {
@@ -77,12 +78,64 @@
       +`<div class="grid-two"><section class="panel"><h3>入料端備品（${ins.length}）</h3>${table(ins)}</section><section class="panel"><h3>出料端備品（${outs.length}）</h3>${table(outs)}</section><section class="panel"><h3>2F 儲位備品（${floor2.length}）</h3>${table(floor2)}</section></div>
       <section class="panel"><h3>維修中／待檢查</h3>${cylinderTable(activeCylinders().filter(c=>["repair","inspect"].includes(c.status)))}</section>`;
   }
-  function cylinderTable(list, showInstallDate=false) {
-    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${showInstallDate?btn("狀態",`detail:${c.id}`,"button button-light button-small"):btn("編輯",`edit:${c.id}`,"button button-light button-small")}${!showInstallDate?btn("狀態",`status:${c.id}`,"button button-light button-small"):""}${!showInstallDate&&["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
+  function cylinderTable(list, showInstallDate=false, databaseMode=false) {
+    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${showInstallDate?btn("狀態",`detail:${c.id}`,"button button-light button-small"):databaseMode?btn("狀態",`edit:${c.id}`,"button button-light button-small"):btn("編輯",`edit:${c.id}`,"button button-light button-small")}${!showInstallDate?(databaseMode?btn("調整油壓缸",`status:${c.id}`,"button button-light button-small"):btn("狀態",`status:${c.id}`,"button button-light button-small")):""}${databaseMode?btn("新增歷史紀錄",`history-add:${c.id}`,"button button-light button-small"):!showInstallDate&&["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
   }
   function database() {
     app.innerHTML=pageHead("油壓缸資料庫","管理全部油壓缸編號、狀態、使用時間與維修歷史。",btn("新增油壓缸","add-cylinder"))
-      +`<div class="toolbar"><input id="cylSearch" class="field" placeholder="搜尋油壓缸編號"><select id="statusFilter" class="search-select"><option value="">全部狀態</option>${Object.entries({in_use:"使用中",spare_in:"備品－入料端",spare_out:"備品－出料端",spare_2f:"備品－2F儲位",repair:"維修中",inspect:"待檢查",scrapped:"報廢",inactive:"已停用"}).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></div><div id="cylinderResults">${cylinderTable(state.cylinders)}</div>`;
+      +`<div class="toolbar"><input id="cylSearch" class="field" placeholder="搜尋油壓缸編號"><select id="statusFilter" class="search-select"><option value="">全部狀態</option>${Object.entries({in_use:"使用中",spare_in:"備品－入料端",spare_out:"備品－出料端",spare_2f:"備品－2F儲位",repair:"維修中",inspect:"待檢查",scrapped:"報廢",inactive:"已停用"}).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></div><div id="cylinderResults">${cylinderTable(state.cylinders,false,true)}</div>`;
+  }
+
+  function usageHistory() {
+    const cylinders=state.cylinders;
+    if(!selectedHistoryCylinderId || !getCyl(selectedHistoryCylinderId)) selectedHistoryCylinderId=cylinders[0]?.id||"";
+    const c=getCyl(selectedHistoryCylinderId);
+    const selector=cylinders.length ? '<select id="usageCylinderSelect" class="search-select">'+cylinders.map(x=>'<option value="'+x.id+'" '+(x.id===c.id?'selected':'')+'>'+esc(x.code)+'</option>').join('')+'</select>' : '';
+    const records=c ? [...(c.periods||[])].sort((a,b)=>(b.startDate||'').localeCompare(a.startDate||'')) : [];
+    const table=records.length ? '<div class="table-wrap"><table><thead><tr><th>使用位置</th><th>開始日期</th><th>結束日期</th><th>使用天數</th><th>操作</th></tr></thead><tbody>'+records.map(p=>{
+      const location=p.area&&p.area!=='未記錄'?p.area+(p.slot?'－位置 '+p.slot:''):'未記錄位置';
+      return '<tr><td>'+esc(location)+'</td><td>'+dateText(p.startDate)+'</td><td>'+(p.endDate?dateText(p.endDate):'<span class="pill green">使用中</span>')+'</td><td>'+fmtDays(daysBetween(p.startDate,p.endDate||today()))+'</td><td><div class="actions">'+btn('修改','period-edit:'+c.id+':'+p.id,'button button-light button-small')+(p.endDate?btn('刪除','period-delete:'+c.id+':'+p.id,'button button-danger button-small'):'')+'</div></td></tr>';
+    }).join('')+'</tbody></table></div>' : empty('這支油壓缸尚無歷年使用紀錄');
+    app.innerHTML=pageHead('歷年使用資料','在此補登或修改每支油壓缸過去的安裝與拆卸期間。')+
+      '<section class="panel"><div class="toolbar"><b>選擇油壓缸</b>'+selector+'</div>'+
+      (c?'<div class="page-head"><div><h3>'+esc(c.code)+'｜歷年使用紀錄</h3><div class="muted">累積使用時間：'+fmtDays(totalDays(c))+'</div></div>'+btn('新增歷史紀錄','period-add:'+c.id)+'</div>'+table:empty('請先到油壓缸資料庫新增油壓缸'))+'</section>';
+  }
+  function periodEditor(cylinderId, periodId=null) {
+    const c=getCyl(cylinderId); if(!c) return;
+    c.periods=c.periods||[];
+    const p=periodId?c.periods.find(x=>x.id===periodId):null;
+    if(periodId&&!p){alert('找不到這筆使用紀錄');return;}
+    const areas=[['1號入料','1號入料端'],['1號出料','1號出料端'],['2號入料','2號入料端'],['2號出料','2號出料端'],['未記錄','未記錄／其他']];
+    const slots=[['','不指定'],['1','位置 1'],['2','位置 2'],['3','位置 3'],['4','位置 4']];
+    openModal(p?'修改歷年使用紀錄':'新增歷史使用紀錄',
+      '<div class="hint-box">油壓缸：<b>'+esc(c.code)+'</b><br>請依照舊資料填寫安裝日期與拆卸日期。結束日期留白代表目前仍在使用中；新增歷史紀錄時必須填寫結束日期。</div><div class="form-grid" style="margin-top:14px">'+selectField('使用位置','area',areas,p?.area||'未記錄')+selectField('位置編號','slot',slots,p?.slot?String(p.slot):'')+field('開始日期','startDate',p?.startDate||today(),'date','required')+field('結束日期','endDate',p?.endDate||'','date',p?'':'required')+'</div>',
+      async v=>{
+        if(!v.startDate) throw Error('請填寫開始日期');
+        if(!p&&!v.endDate) throw Error('新增歷史紀錄必須填寫結束日期');
+        if(v.endDate&&v.endDate<v.startDate) throw Error('結束日期不可早於開始日期');
+        const candidateEnd=v.endDate||'9999-12-31';
+        const conflict=c.periods.some(x=>{
+          if(p&&x.id===p.id)return false;
+          const otherEnd=x.endDate||'9999-12-31';
+          return v.startDate<otherEnd&&candidateEnd>x.startDate;
+        });
+        if(conflict) throw Error('這段日期與該油壓缸既有使用期間重疊，請檢查日期');
+        checkpoint();
+        const record={id:p?.id||crypto.randomUUID(),area:v.area||'未記錄',slot:v.slot?Number(v.slot):'',startDate:v.startDate,endDate:v.endDate||null};
+        if(p) Object.assign(p,record); else c.periods.push(record);
+        const detailText=(record.area==='未記錄'?'未記錄位置':record.area+(record.slot?'－位置 '+record.slot:''))+'；'+record.startDate+' 至 '+(record.endDate||'使用中');
+        addEvent(p?'修改歷史使用紀錄':'補登歷史使用紀錄',c,detailText,record.endDate||record.startDate);
+        await save(); currentPage='usageHistory'; selectedHistoryCylinderId=c.id; render();
+      });
+  }
+  function deletePeriod(cylinderId,periodId) {
+    const c=getCyl(cylinderId); if(!c)return;
+    const p=(c.periods||[]).find(x=>x.id===periodId); if(!p)return;
+    if(!p.endDate){alert('目前使用中的紀錄不可刪除。請先透過更換流程結束使用期間。');return;}
+    if(!confirm('確定刪除這筆歷年使用紀錄？此操作會影響累積使用天數。'))return;
+    checkpoint();c.periods=c.periods.filter(x=>x.id!==periodId);
+    addEvent('刪除歷史使用紀錄',c,(p.area||'未記錄')+'；'+p.startDate+' 至 '+p.endDate,p.endDate);
+    save().then(()=>{selectedHistoryCylinderId=c.id;currentPage='usageHistory';render();});
   }
   function history() {
     app.innerHTML=pageHead("異動與維修紀錄","安裝、拆卸、更換、備品調動、故障與維修完成紀錄。")
@@ -94,7 +147,7 @@
   }
   function render() {
     $$(".nav-button").forEach(b=>b.classList.toggle("active",b.dataset.page===currentPage));
-    ({overview,online,spares,database,history,settings}[currentPage] || overview)();
+    ({overview,online,spares,database,usageHistory,history,settings}[currentPage] || overview)();
   }
   function field(label,name,value="",type="text",extra="") {
     return `<div class="form-field"><label for="f_${name}">${label}</label><input class="field" id="f_${name}" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;
@@ -237,6 +290,7 @@
     };reader.readAsText(file);
   }
   app.addEventListener("change",async e=>{
+    if(e.target.id==="usageCylinderSelect"){selectedHistoryCylinderId=e.target.value;render();return;}
     if(!e.target.matches(".spare-readiness"))return;
     const c=getCyl(e.target.dataset.cylinderId);if(!c)return;
     checkpoint();c.spareReadiness=e.target.value;
@@ -245,7 +299,7 @@
   });
   app.addEventListener("click",e=>{
     const b=e.target.closest("[data-action]");if(!b)return;
-    const [action,id]=b.dataset.action.split(":");
+    const [action,id,subId]=b.dataset.action.split(":");
     if(action==="add-cylinder")addCylinder();
     else if(action==="position")positionAction(id);
     else if(action==="install")installSpare(id);
@@ -255,6 +309,10 @@
     
     else if(action==="edit")editCylinder(id);
     else if(action==="detail")detail(id);
+    else if(action==="history-add"){selectedHistoryCylinderId=id;currentPage="usageHistory";render();periodEditor(id);}
+    else if(action==="period-add")periodEditor(id);
+    else if(action==="period-edit")periodEditor(id,subId);
+    else if(action==="period-delete")deletePeriod(id,subId);
     else if(action==="export")exportData();
     else if(action==="import")$("#importFile").click();
   });
