@@ -68,7 +68,7 @@
       <section class="panel"><h3>維修中／待檢查</h3>${cylinderTable(activeCylinders().filter(c=>["repair","inspect"].includes(c.status)))}</section>`;
   }
   function cylinderTable(list) {
-    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th><th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td><td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${btn("編輯",`edit:${c.id}`,"button button-light button-small")}${c.status==="in_use"?btn("拆卸",`remove:${c.id}`,"button button-light button-small"):""}${btn("紀錄",`detail:${c.id}`,"button button-light button-small")}</div></td></tr>`).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
+    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th><th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td><td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${btn("編輯",`edit:${c.id}`,"button button-light button-small")}${c.status==="in_use"?btn("拆卸",`remove:${c.id}`,"button button-light button-small"):""}${["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}${btn("狀態",`status:${c.id}`,"button button-light button-small")}${btn("紀錄",`detail:${c.id}`,"button button-light button-small")}</div></td></tr>`).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
   }
   function database() {
     app.innerHTML=pageHead("油壓缸資料庫","管理全部油壓缸編號、狀態、使用時間與維修歷史。",btn("新增油壓缸","add-cylinder"))
@@ -106,7 +106,7 @@
   }
   function positionAction(id) {
     const p=state.positions.find(x=>x.id===id); const old=getCyl(p.cylinderId);
-    const options=activeCylinders().filter(c=>c.status!=="in_use"&&c.status!=="scrapped"&&c.status!=="inactive");
+    const options=activeCylinders().filter(c=>["spare_in","spare_out"].includes(c.status));
     openModal(old?"更換線上油壓缸":"安裝油壓缸",`<div class="hint-box">位置：${p.area}端／位置 ${p.slot}${old?"。目前安裝："+esc(old.code)+"，確認後會結束舊油壓缸本次使用期間，並將舊設備轉為備品。":""}</div><div class="form-grid" style="margin-top:14px">${selectField("選擇要安裝的油壓缸","cylinderId",[["","請選擇"],...options.map(c=>[c.id,c.code+"（"+statusLabel(c.status)+"）"])],"")}${field("安裝日期","date",today(),"date")}</div>`,async v=>{
       const c=getCyl(v.cylinderId); if(!c) throw Error("請選擇油壓缸");
       if(old && old.id===c.id) throw Error("不能將同一支油壓缸重新安裝在原位置");
