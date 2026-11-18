@@ -210,7 +210,7 @@
   async function init(){
     try{state=await CYLDB.load();await CYLDB.save(state);$("#storageStatus").textContent="本機儲存正常";render();}
     catch(e){app.innerHTML='<section class="panel"><h2>無法啟動本機資料庫</h2><p>'+esc(e.message)+'</p><p class="muted">請使用最新版 Safari、Chrome 或 Edge，並確認瀏覽器允許網站儲存資料。</p></section>';}
-    if("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
+    if("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("./service-worker.js",{updateViaCache:"none"}).then(reg=>reg.update()).catch(()=>{});
   }
   init();
 })();
