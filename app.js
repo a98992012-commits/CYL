@@ -22,6 +22,8 @@
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const getCyl = id => state.cylinders.find(c => c.id === id);
   const statusLabel = s => ({in_use:"使用中",spare_in:"備品－入料端",spare_out:"備品－出料端",spare_2f:"備品－2F儲位",repair:"維修中",inspect:"待檢查",scrapped:"報廢",inactive:"已停用"}[s] || s);
+  const spareReadiness = c => c.spareReadiness || "ready";
+  const readinessLabel = c => spareReadiness(c)==="needs_prep"?"需整備":"可用";
   const statusClass = s => s==="in_use"?"green":s==="repair"||s==="inspect"?"orange":s==="scrapped"?"red":"";
   const activeCylinders = () => state.cylinders.filter(c => c.active !== false);
   const addEvent = (type, c, detail, date=today()) => state.events.unshift({id:crypto.randomUUID(),date,type,code:c?.code || "—",detail});
