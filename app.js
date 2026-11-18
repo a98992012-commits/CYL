@@ -49,13 +49,13 @@
     const cylinders=activeCylinders(), used=cylinders.filter(c=>c.status==="in_use").length;
     const spares=cylinders.filter(c=>c.status==="spare_in"||c.status==="spare_out"||c.status==="spare_2f").length;
     const repairs=cylinders.filter(c=>c.status==="repair").length;
-    const longest=[...cylinders].sort((a,b)=>totalDays(b)-totalDays(a))[0];
+    const longest=cylinders.filter(c=>c.status==="in_use").sort((a,b)=>currentDays(b)-currentDays(a))[0];
     const furnace = n => {
       const areas=[`${n}號入料`,`${n}號出料`];
       return `<section class="furnace"><h3>${n}號加熱爐</h3><div class="area-grid">${areas.map(area=>`<div class="area-card"><h4>${area}端</h4><div class="slots">${state.positions.filter(p=>p.area===area).map(p=>positionCard(p,true)).join("")}</div></div>`).join("")}</div></section>`;
     };
     app.innerHTML=pageHead("設備總覽","兩座加熱爐共 16 個線上位置，位置順序由左至右為 4、3、2、1。")
-      +`<div class="stats"><div class="stat"><div class="stat-label">線上使用中</div><div class="stat-value">${used}<small> / 16</small></div><div class="stat-note">目前安裝的油壓缸</div></div><div class="stat"><div class="stat-label">備品數量</div><div class="stat-value">${spares}</div><div class="stat-note">入料端、出料端與 2F 儲位</div></div><div class="stat"><div class="stat-label">維修中</div><div class="stat-value">${repairs}</div><div class="stat-note">尚未完成維修</div></div><div class="stat"><div class="stat-label">累積使用最長</div><div class="stat-value" style="font-size:19px">${longest?esc(longest.code):"—"}</div><div class="stat-note">${longest?fmtOverviewDays(totalDays(longest)):"尚無資料"}</div></div></div>
+      +`<div class="stats"><div class="stat"><div class="stat-label">線上使用中</div><div class="stat-value">${used}<small> / 16</small></div><div class="stat-note">目前安裝的油壓缸</div></div><div class="stat"><div class="stat-label">備品數量</div><div class="stat-value">${spares}</div><div class="stat-note">入料端、出料端與 2F 儲位</div></div><div class="stat"><div class="stat-label">維修中</div><div class="stat-value">${repairs}</div><div class="stat-note">尚未完成維修</div></div><div class="stat"><div class="stat-label">上線最久</div><div class="stat-value" style="font-size:19px">${longest?esc(longest.code):"—"}</div><div class="stat-note">${longest?fmtOverviewDays(currentDays(longest)):"目前沒有線上使用中的油壓缸"}</div></div></div>
       <div class="overview-furnaces"><div class="furnace-grid">${furnace(1)}${furnace(2)}</div></div>
       <div class="grid-two" style="margin-top:16px"><section class="panel"><h3>近期異動</h3>${eventList(state.events.slice(0,6))}</section><section class="panel"><h3>當前使用天數排行</h3>${ranking(cylinders,"current")}</section></div>`;
   }
