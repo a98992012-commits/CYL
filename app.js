@@ -222,7 +222,7 @@
   });
   async function init(){
     try{
-      state=await CYLDB.load(); state.undoSnapshot=null;
+      state=await CYLDB.load();
       let repaired=false; const claimed=new Set();
       for(const p of state.positions){
         if(!p.cylinderId) continue;
