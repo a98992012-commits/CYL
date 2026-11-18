@@ -28,7 +28,7 @@
   const readinessLabel = c => spareReadiness(c)==="needs_prep"?"需整備":"可用";
   const statusClass = s => s==="in_use"?"green":s==="repair"||s==="inspect"?"orange":s==="scrapped"?"red":"";
   const activeCylinders = () => state.cylinders.filter(c => c.active !== false);
-  const addEvent = (type, c, detail, date=today()) => state.events.unshift({id:crypto.randomUUID(),date,type,code:c?.code || "—",detail});
+  const addEvent = (type, c, detail, date=today(), category="") => state.events.unshift({id:crypto.randomUUID(),date,type,code:c?.code || "—",detail,...(category?{category}:{})});
   const save = async () => { await CYLDB.save(state); $("#storageStatus").textContent = "已儲存於本機"; updateUndoButton(); };
   const checkpoint = () => { const snapshot=JSON.parse(JSON.stringify(state)); snapshot.undoSnapshot=null; state.undoSnapshot=snapshot; };
   const updateUndoButton = () => { const b=$("#undoTop"); if(b) b.disabled=!state?.undoSnapshot; };
@@ -60,7 +60,7 @@
       <div class="grid-two" style="margin-top:16px"><section class="panel"><h3>近期異動</h3>${eventList(state.events.slice(0,6))}</section><section class="panel"><h3>當前使用天數排行</h3>${ranking(cylinders,"current")}</section></div>`;
   }
   function eventList(events) {
-    return events.length?`<div class="record-list">${events.map(e=>`<div class="record"><div class="record-main"><div class="record-title">${esc(e.code)} · ${esc(e.type)}</div><div class="record-meta">${dateText(e.date)}　${esc(e.detail)}</div></div></div>`).join("")}</div>`:empty("尚無異動紀錄");
+    return events.length?`<div class="record-list">${events.map(e=>`<div class="record"><div class="record-main"><div class="record-title">${esc(e.code)} · ${esc(e.type)}${e.category?` · ${e.category==="scheduled"?"定期更換":"異況"}`:""}</div><div class="record-meta">${dateText(e.date)}　${esc(e.detail)}</div></div></div>`).join("")}</div>`:empty("尚無異動紀錄");
   }
   function cylinderPositionCode(c) {
     const periods=c.periods||[];
@@ -169,7 +169,7 @@
   }
   function history() {
     app.innerHTML=pageHead("異動與維修紀錄","安裝、拆卸、更換、備品調動、故障與維修完成紀錄。")
-      +`<div class="toolbar"><input id="eventSearch" class="field" placeholder="搜尋編號或紀錄內容"></div><section class="panel"><div id="eventResults">${eventList(state.events)}</div></section>`;
+      +`<div class="toolbar"><input id="eventSearch" class="field" placeholder="搜尋編號或紀錄內容"><select id="eventCategoryFilter" class="search-select"><option value="">全部異動分類</option><option value="scheduled">定期更換</option><option value="abnormal">異況</option><option value="unclassified">未分類異動</option></select></div><section class="panel"><div id="eventResults">${eventList(state.events)}</div></section>`;
   }
   function settings() {
     app.innerHTML=pageHead("資料備份與還原","所有設備資料保存在目前手機／瀏覽器。建議定期匯出備份。")
@@ -201,12 +201,14 @@
   function positionAction(id) {
     const p=state.positions.find(x=>x.id===id); const old=getCyl(p.cylinderId);
     const options=activeCylinders().filter(c=>["spare_in","spare_out","spare_2f"].includes(c.status)&&spareReadiness(c)==="ready");
-    openModal(old?"更換線上油壓缸":"安裝油壓缸",`<div class="hint-box">位置：${p.area}端／位置 ${p.slot}${old?"。目前安裝："+esc(old.code)+"，確認後會結束舊油壓缸本次使用期間，並將舊設備轉為備品。":""}</div><div class="form-grid" style="margin-top:14px">${selectField("選擇要安裝的油壓缸","cylinderId",[["","請選擇"],...options.map(c=>[c.id,c.code+"（"+statusLabel(c.status)+"）"])],"")}${field("安裝日期","date",today(),"date")}</div>`,async v=>{
+    openModal(old?"更換線上油壓缸":"安裝油壓缸",`<div class="hint-box">位置：${p.area}端／位置 ${p.slot}${old?"。目前安裝："+esc(old.code)+"，確認後會結束舊油壓缸本次使用期間，並將舊設備轉為備品。":""}</div><div class="form-grid" style="margin-top:14px">${selectField("選擇要安裝的油壓缸","cylinderId",[["","請選擇"],...options.map(c=>[c.id,c.code+"（"+statusLabel(c.status)+"）"])],"")}${field("安裝日期","date",today(),"date")}${old?`<div class="form-field"><label for="f_replacementCategory">更換分類</label><select id="f_replacementCategory" name="replacementCategory" required><option value="">請選擇</option><option value="scheduled">定期更換</option><option value="abnormal">異況</option></select></div>${field("更換備註","replacementNote","","text",'maxlength="300" placeholder="請填寫更換原因或相關說明"')}`:""}</div>`,async v=>{
       const c=getCyl(v.cylinderId); if(!c) throw Error("請選擇油壓缸");
       if(old && old.id===c.id) throw Error("不能將同一支油壓缸重新安裝在原位置");
+      if(old && !["scheduled","abnormal"].includes(v.replacementCategory)) throw Error("請選擇定期更換或異況");
       checkpoint();
-      if(old){const period=old.periods.find(x=>!x.endDate);if(period)period.endDate=v.date;old.status=p.area.includes("入料")?"spare_in":"spare_out";old.spareReadiness="needs_prep";old.location="";addEvent("拆卸",old,p.area+"位置 "+p.slot+"；轉為"+statusLabel(old.status),v.date);}
-      c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent(old?"更換安裝":"安裝",c,c.location,v.date);await save();render();
+      const replacementDetail=old?`分類：${v.replacementCategory==="scheduled"?"定期更換":"異況"}；更換備註：${v.replacementNote?.trim()||"未填寫"}；位置：${p.area}位置 ${p.slot}`:c.location;
+      if(old){const period=old.periods.find(x=>!x.endDate);if(period)period.endDate=v.date;old.status=p.area.includes("入料")?"spare_in":"spare_out";old.spareReadiness="needs_prep";old.location="";addEvent("拆卸",old,`轉為${statusLabel(old.status)}；${replacementDetail}`,v.date,v.replacementCategory);}
+      c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent(old?"更換安裝":"安裝",c,old?replacementDetail:c.location,v.date,old?v.replacementCategory:"");await save();render();
     });
   }
   function adjustOnlinePosition(id) {
@@ -368,8 +370,10 @@
       const target=$("#scrappedResults");
       if(target) target.innerHTML=scrappedTable(list);
     }
-    if(e.target.id==="eventSearch"){
-      const q=e.target.value.toLowerCase();$("#eventResults").innerHTML=eventList(state.events.filter(x=>(x.code+" "+x.detail+" "+x.type).toLowerCase().includes(q)));
+    if(e.target.id==="eventSearch"||e.target.id==="eventCategoryFilter"){
+      const q=($("#eventSearch")?.value||"").toLowerCase(), category=$("#eventCategoryFilter")?.value||"";
+      const list=state.events.filter(x=>(x.code+" "+x.detail+" "+x.type).toLowerCase().includes(q)&&(!category||(category==="unclassified"?!x.category:x.category===category)));
+      $("#eventResults").innerHTML=eventList(list);
     }
   });
   async function init(){
