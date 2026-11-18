@@ -78,7 +78,7 @@
       <section class="panel"><h3>維修中／待檢查</h3>${cylinderTable(activeCylinders().filter(c=>["repair","inspect"].includes(c.status)))}</section>`;
   }
   function cylinderTable(list, showInstallDate=false) {
-    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${btn("編輯",`edit:${c.id}`,"button button-light button-small")}${c.status==="in_use"?btn("拆卸",`remove:${c.id}`,"button button-light button-small"):""}${["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}${btn("狀態",`status:${c.id}`,"button button-light button-small")}${btn("紀錄",`detail:${c.id}`,"button button-light button-small")}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
+    return list.length?`<div class="table-wrap"><table><thead><tr><th>油壓缸編號</th><th>狀態</th><th>目前位置</th>${showInstallDate?"<th>安裝日期</th>":""}<th>本次使用</th><th>累積使用</th><th>操作</th></tr></thead><tbody>${list.map(c=>{const activePeriod=(c.periods||[]).find(p=>!p.endDate);return `<tr><td><b>${esc(c.code)}</b></td><td><span class="pill ${statusClass(c.status)}">${statusLabel(c.status)}</span></td><td>${esc(c.location||"—")}</td>${showInstallDate?`<td>${c.status==="in_use"&&activePeriod?dateText(activePeriod.startDate):"—"}</td>`:""}<td>${c.status==="in_use"?fmtDays(currentDays(c)):"—"}</td><td>${fmtDays(totalDays(c))}</td><td><div class="actions">${btn("狀態",`status:${c.id}`,"button button-light button-small")}${c.status==="in_use"?btn("拆卸",`remove:${c.id}`,"button button-light button-small"):""}${["repair","inspect"].includes(c.status)?btn("維修處理",`repair:${c.id}`,"button button-light button-small"):""}${btn("調整位置",`move-position:${c.id}`,"button button-light button-small")}${btn("紀錄",`detail:${c.id}`,"button button-light button-small")}</div></td></tr>`}).join("")}</tbody></table></div>`:empty("目前沒有符合條件的油壓缸");
   }
   function database() {
     app.innerHTML=pageHead("油壓缸資料庫","管理全部油壓缸編號、狀態、使用時間與維修歷史。",btn("新增油壓缸","add-cylinder"))
@@ -122,8 +122,21 @@
       const c=getCyl(v.cylinderId); if(!c) throw Error("請選擇油壓缸");
       if(old && old.id===c.id) throw Error("不能將同一支油壓缸重新安裝在原位置");
       checkpoint();
-      if(old){const period=old.periods.find(x=>!x.endDate);if(period)period.endDate=v.date;old.status=p.area.includes("入料")?"spare_in":"spare_out";old.location="";addEvent("拆卸",old,p.area+"位置 "+p.slot+"；轉為"+statusLabel(old.status),v.date);}
+      if(old){const period=old.periods.find(x=>!x.endDate);if(period)period.endDate=v.date;old.status=p.area.includes("入料")?"spare_in":"spare_out";old.spareReadiness="needs_prep";old.location="";addEvent("拆卸",old,p.area+"位置 "+p.slot+"；轉為"+statusLabel(old.status),v.date);}
       c.status="in_use";c.location=p.area+"－位置 "+p.slot;c.periods.push({id:crypto.randomUUID(),area:p.area,slot:p.slot,startDate:v.date,endDate:null});p.cylinderId=c.id;addEvent(old?"更換安裝":"安裝",c,c.location,v.date);await save();render();
+    });
+  }
+  function adjustOnlinePosition(id) {
+    const c=getCyl(id), current=state.positions.find(p=>p.cylinderId===id);
+    if(!c||c.status!=="in_use"||!current){alert("找不到這支油壓缸目前的線上位置，請先檢查設備總覽。");return;}
+    const targets=state.positions.filter(p=>!p.cylinderId&&p.id!==current.id);
+    if(!targets.length){alert("目前沒有空的線上位置可供調整。");return;}
+    openModal("調整線上位置",`<div class="hint-box">油壓缸：${esc(c.code)}<br>目前位置：${esc(current.area)}－位置 ${current.slot}</div><div class="form-grid" style="margin-top:14px">${selectField("新位置","positionId",targets.map(p=>[p.id,p.area+"－位置 "+p.slot]),targets[0].id)}</div><p class="help">此操作只移動線上位置，不會結束本次使用期間。</p>`,async v=>{
+      const target=state.positions.find(p=>p.id===v.positionId);
+      if(!target||target.cylinderId)throw Error("目標位置已被占用，請重新選擇");
+      checkpoint();current.cylinderId=null;target.cylinderId=c.id;c.location=target.area+"－位置 "+target.slot;
+      addEvent("線上位置調整",c,"由 "+current.area+"－位置 "+current.slot+" 移至 "+target.area+"－位置 "+target.slot);
+      await save();render();
     });
   }
   function installSpare(id) {
@@ -140,7 +153,7 @@
     openModal("拆卸油壓缸",`<div class="form-grid">${field("拆卸日期","date",today(),"date")}${selectField("拆卸後狀態","status",[["spare_in","備品－入料端"],["spare_out","備品－出料端"],["spare_2f","備品－2F儲位"],["repair","維修中"],["inspect","待檢查"],["scrapped","報廢"]],p?.area.includes("入料")?"spare_in":"spare_out")}${field("故障原因／備註","detail")}</div>`,async v=>{
       const period=c.periods.find(x=>!x.endDate);if(period&&v.date<period.startDate)throw Error("拆卸日期不可早於安裝日期");
       checkpoint();if(period)period.endDate=v.date;
-      if(p)p.cylinderId=null;c.status=v.status;c.location="";if(v.status==="repair")c.repairs.push({id:crypto.randomUUID(),startDate:v.date,reason:v.detail||"",content:"",endDate:null});addEvent("拆卸",c,statusLabel(v.status)+(v.detail?"；"+v.detail:""),v.date);await save();render();
+      if(p)p.cylinderId=null;c.status=v.status;c.location="";if(["spare_in","spare_out","spare_2f"].includes(v.status))c.spareReadiness="needs_prep";if(v.status==="repair")c.repairs.push({id:crypto.randomUUID(),startDate:v.date,reason:v.detail||"",content:"",endDate:null});addEvent("拆卸",c,statusLabel(v.status)+(v.detail?"；"+v.detail:""),v.date);await save();render();
     });
   }
   function repairAction(id) {
@@ -196,7 +209,7 @@
     else if(action==="install")installSpare(id);
     else if(action==="remove")removeCylinder(id);
     else if(action==="repair")repairAction(id);
-    else if(action==="status")statusAction(id);
+    else if(action==="status")statusAction(id);\n    else if(action==="move-position")adjustOnlinePosition(id);
     else if(action==="edit")editCylinder(id);
     else if(action==="detail")detail(id);
     else if(action==="export")exportData();
