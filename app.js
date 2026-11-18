@@ -56,7 +56,7 @@
     app.innerHTML=pageHead("設備總覽","兩座加熱爐共 16 個線上位置，位置順序由左至右為 4、3、2、1。")
       +`<div class="stats"><div class="stat"><div class="stat-label">線上使用中</div><div class="stat-value">${used}<small> / 16</small></div><div class="stat-note">目前安裝的油壓缸</div></div><div class="stat"><div class="stat-label">備品數量</div><div class="stat-value">${spares}</div><div class="stat-note">入料端、出料端與 2F 儲位</div></div><div class="stat"><div class="stat-label">維修中</div><div class="stat-value">${repairs}</div><div class="stat-note">尚未完成維修</div></div><div class="stat"><div class="stat-label">累積使用最長</div><div class="stat-value" style="font-size:19px">${longest?esc(longest.code):"—"}</div><div class="stat-note">${longest?fmtDays(totalDays(longest)):"尚無資料"}</div></div></div>
       <div class="overview-furnaces"><div class="furnace-grid">${furnace(1)}${furnace(2)}</div></div>
-      <div class="grid-two" style="margin-top:16px"><section class="panel"><h3>近期異動</h3>${eventList(state.events.slice(0,6))}</section><section class="panel"><h3>累積使用時間排行</h3>${ranking(cylinders)}</section></div>`;
+      <div class="grid-two" style="margin-top:16px"><section class="panel"><h3>近期異動</h3>${eventList(state.events.slice(0,6))}</section><section class="panel"><h3>當前使用天數排行</h3>${ranking(cylinders,"current")}</section></div>`;
   }
   function eventList(events) {
     return events.length?`<div class="record-list">${events.map(e=>`<div class="record"><div class="record-main"><div class="record-title">${esc(e.code)} · ${esc(e.type)}</div><div class="record-meta">${dateText(e.date)}　${esc(e.detail)}</div></div></div>`).join("")}</div>`:empty("尚無異動紀錄");
@@ -69,9 +69,11 @@
     const prefix=areaMap[p.area];
     return prefix?prefix+"-"+p.slot:"—";
   }
-  function ranking(cylinders) {
-    const top=[...cylinders].sort((a,b)=>totalDays(b)-totalDays(a)).slice(0,5), max=Math.max(1,...top.map(totalDays));
-    return top.length?`<div class="rank-list">${top.map((c,i)=>`<div class="rank-item"><span class="rank-number">${i+1}</span><div><b>${esc(c.code)}</b><div class="muted" style="font-size:12px;margin-top:2px">位置：${esc(cylinderPositionCode(c))}</div><div class="rank-bar"><div class="rank-fill" style="width:${totalDays(c)/max*100}%"></div></div></div><b>${fmtDays(totalDays(c))}</b></div>`).join("")}</div>`:empty("新增油壓缸後會顯示排行");
+  function ranking(cylinders, mode="total") {
+    const metric=mode==="current"?currentDays:totalDays;
+    const candidates=mode==="current"?cylinders.filter(c=>c.status==="in_use"):[...cylinders];
+    const top=[...candidates].sort((a,b)=>metric(b)-metric(a)).slice(0,5), max=Math.max(1,...top.map(metric));
+    return top.length?`<div class="rank-list">${top.map((c,i)=>`<div class="rank-item"><span class="rank-number">${i+1}</span><div><b>${esc(c.code)}</b><div class="muted" style="font-size:12px;margin-top:2px">位置：${esc(cylinderPositionCode(c))}</div><div class="rank-bar"><div class="rank-fill" style="width:${metric(c)/max*100}%"></div></div></div><b>${fmtDays(metric(c))}</b></div>`).join("")}</div>`:empty(mode==="current"?"目前沒有線上使用中的油壓缸":"新增油壓缸後會顯示排行");
   }
   function online() {
     const areas=["1號入料","1號出料","2號入料","2號出料"];
@@ -91,7 +93,7 @@
   }
   function database() {
     app.innerHTML=pageHead("油壓缸資料庫","管理全部油壓缸編號、狀態、使用時間與維修歷史。",btn("新增油壓缸","add-cylinder"))
-      +`<div class="toolbar"><input id="cylSearch" class="field" placeholder="搜尋油壓缸編號"><select id="statusFilter" class="search-select"><option value="">全部狀態</option>${Object.entries({in_use:"使用中",spare_in:"備品－入料端",spare_out:"備品－出料端",spare_2f:"備品－2F儲位",repair:"維修中",inspect:"待檢查",scrapped:"報廢",inactive:"已停用"}).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></div><div id="cylinderResults">${cylinderTable(state.cylinders,false,true)}</div>`;
+      +`<section class="panel" style="margin-bottom:16px"><h3>累積使用天數排行</h3>${ranking(state.cylinders,"total")}</section><div class="toolbar"><input id="cylSearch" class="field" placeholder="搜尋油壓缸編號"><select id="statusFilter" class="search-select"><option value="">全部狀態</option>${Object.entries({in_use:"使用中",spare_in:"備品－入料端",spare_out:"備品－出料端",spare_2f:"備品－2F儲位",repair:"維修中",inspect:"待檢查",scrapped:"報廢",inactive:"已停用"}).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select></div><div id="cylinderResults">${cylinderTable(state.cylinders,false,true)}</div>`;
   }
 
   function historyInfo(id) {
